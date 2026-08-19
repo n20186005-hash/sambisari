@@ -26,12 +26,12 @@ type Lang = "id" | "en";
 type Consent = "essential" | "analytics" | null;
 
 const assets = {
-  logo: "/manus-storage/sambisari-arch-logo_aaa36945.png",
-  archive: "/manus-storage/sambisari-strata-archive_e3f3921f.png",
-  stone: "/manus-storage/sambisari-stone-study_c464168e.png",
-  pattern: "/manus-storage/sambisari-field-pattern_f015097f.png",
-  hero: "/manus-storage/sambisari-main-temple-crisco1492_65c3c153.jpg",
-  complex: "/manus-storage/sambisari-complex-teshteh_c578ea64.jpg",
+  logo: "/03-sambisari-arch-logo.png",
+  archive: "/05-sambisari-strata-archive.png",
+  stone: "/06-sambisari-stone-study.png",
+  pattern: "/07-sambisari-field-pattern.png",
+  hero: "/01-sambisari-main-temple-crisco1492.jpg",
+  complex: "/02-sambisari-complex-teshteh.jpg",
 };
 
 const mapsUrl = "https://maps.app.goo.gl/YHZQSSJ9LiyG6KUq8";
