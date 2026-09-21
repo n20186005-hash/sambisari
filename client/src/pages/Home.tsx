@@ -253,10 +253,23 @@ export default function Home() {
   const t = copy[lang];
 
   const setLang = (language: Lang) => { localStorage.setItem("sambisari-language", language); setLangState(language); };
-  useEffect(() => { document.documentElement.lang = lang; document.title = lang === "id" ? "Candi Sambisari — Panduan Lapangan" : "Sambisari Temple — Field Guide"; }, [lang]);
+  useEffect(() => { document.documentElement.lang = lang; document.title = lang === "id" ? "Candi Sambisari Jogja: Lokasi, Sejarah & Panduan Kunjungan" : "Sambisari Temple Yogyakarta: Location, History & Visiting Guide"; }, [lang]);
   useEffect(() => { if (consent === "analytics") setAnalyticsConsent("analytics"); }, [consent]);
 
-  const jsonLd = useMemo(() => ({ "@context": "https://schema.org", "@type": "TouristAttraction", name: "Candi Sambisari", alternateName: "Sambisari Temple", description: lang === "id" ? "Candi Hindu beraliran Siwaistis di Kalasan, Sleman, Daerah Istimewa Yogyakarta." : "A Shaivite Hindu temple in Kalasan, Sleman Regency, Special Region of Yogyakarta.", address: { "@type": "PostalAddress", streetAddress: "Jl. Candi Sambisari, Sambisari, Purwomartani, Kec. Kalasan", addressLocality: "Sleman", addressRegion: "Daerah Istimewa Yogyakarta", postalCode: "55571", addressCountry: "ID" }, geo: { "@type": "GeoCoordinates", latitude: -7.7625591, longitude: 110.4469551 }, openingHours: "Mo-Su", aggregateRating: { "@type": "AggregateRating", ratingValue: "4.6", reviewCount: "8142", bestRating: "5" }, url: mapsUrl }), [lang]);
+  const jsonLd = useMemo(() => ({
+    "@context": "https://schema.org",
+    "@type": "TouristAttraction",
+    name: "Candi Sambisari",
+    alternateName: "Sambisari Temple",
+    description: lang === "id"
+      ? "Candi Hindu beraliran Siwaistis di Kalasan, Sleman, Daerah Istimewa Yogyakarta, yang ditemukan kembali tertimbun sekitar 6,5 meter di bawah permukaan tanah."
+      : "A Shaivite Hindu temple in Kalasan, Sleman Regency, Special Region of Yogyakarta, rediscovered buried roughly 6.5 metres below ground.",
+    url: "https://sambisari.com/",
+    sameAs: mapsUrl,
+    address: { "@type": "PostalAddress", streetAddress: "Jl. Candi Sambisari, Sambisari, Purwomartani, Kec. Kalasan", addressLocality: "Sleman", addressRegion: "Daerah Istimewa Yogyakarta", postalCode: "55571", addressCountry: "ID" },
+    geo: { "@type": "GeoCoordinates", latitude: -7.7625591, longitude: 110.4469551 },
+    aggregateRating: { "@type": "AggregateRating", ratingValue: "4.6", reviewCount: "8142", bestRating: "5" },
+  }), [lang]);
   const faqLd = useMemo(() => ({ "@context": "https://schema.org", "@type": "FAQPage", mainEntity: t.faq.map(([question, answer]) => ({ "@type": "Question", name: question, acceptedAnswer: { "@type": "Answer", text: answer } })) }), [t.faq]);
 
   const page = location === "/privacy-policy" ? "privacy" : location === "/terms-of-service" ? "terms" : location === "/cookie-settings" ? "cookies" : null;
