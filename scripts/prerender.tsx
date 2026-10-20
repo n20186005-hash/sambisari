@@ -1,0 +1,23 @@
+import React from 'react';
+import {renderToString} from 'react-dom/server';
+import {readFile,mkdir,writeFile} from 'node:fs/promises';
+import path from 'node:path';
+import Home from '../client/src/pages/Home';
+const origin='https://sambisari.com';const dir=path.resolve('dist/public');
+const pages=[['/','/en/'],['/privacy-policy/','/en/privacy-policy/'],['/terms-of-service/','/en/terms-of-service/'],['/cookie-settings/','/en/cookie-settings/']];
+const titles={id:['Candi Sambisari Jogja: Lokasi, Sejarah & Panduan Kunjungan','Kebijakan Privasi | Sambisari Field Guide','Syarat Layanan | Sambisari Field Guide','Pengaturan Cookie | Sambisari Field Guide'],en:['Sambisari Temple Yogyakarta: Location, History & Visiting Guide','Privacy Policy | Sambisari Field Guide','Terms of Service | Sambisari Field Guide','Cookie Settings | Sambisari Field Guide']};
+const descriptions={id:['Panduan independen Candi Sambisari di Kalasan, Sleman: lokasi dan peta, konteks sejarah, informasi kunjungan bersumber dan hal yang perlu dikonfirmasi.','Cara panduan independen Sambisari menangani data teknis, layanan pihak ketiga dan pilihan privasi pengunjung.','Ketentuan penggunaan panduan independen Sambisari, sumber informasi, hak cipta dan batas kepastian perjalanan.','Kelola persetujuan analitik dan penyimpanan preferensi pada panduan independen Sambisari.'],en:['Independent Sambisari Temple guide in Kalasan, Sleman: location and map, historical context, sourced visitor information and details to confirm before travel.','How the independent Sambisari guide handles technical data, third-party services and visitor privacy choices.','Terms for using the independent Sambisari guide, its information sources, copyright and limits of travel guidance.','Manage analytics consent and preference storage for the independent Sambisari visitor guide.']};
+const esc=(s:string)=>s.replaceAll('&','&amp;').replaceAll('"','&quot;').replaceAll('<','&lt;').replaceAll('>','&gt;');
+let template=await readFile(path.join(dir,'index.html'),'utf8');
+template=template.replace(/<title>[\s\S]*?<\/title>/g,'').replace(/<link\b[^>]*rel="(?:canonical|alternate)"[^>]*>/g,'').replace(/<meta\b[^>]*>/g,tag=>/name="(?:description|twitter:[^"]*)"|property="og:[^"]*"/.test(tag)?'':tag);
+for(const [i,pair] of pages.entries())for(const [j,route] of pair.entries()){
+ const lang=j===0?'id':'en';const title=titles[lang][i];const description=descriptions[lang][i];
+ const head=`<title>${esc(title)}</title><meta name="description" content="${esc(description)}"><meta name="robots" content="index, follow"><link rel="canonical" href="${origin+route}"><link rel="alternate" hreflang="id" href="${origin+pair[0]}"><link rel="alternate" hreflang="en" href="${origin+pair[1]}"><link rel="alternate" hreflang="x-default" href="${origin+pair[0]}"><meta property="og:type" content="website"><meta property="og:title" content="${esc(title)}"><meta property="og:description" content="${esc(description)}"><meta property="og:url" content="${origin+route}"><meta property="og:locale" content="${lang==='id'?'id_ID':'en_US'}"><meta property="og:image" content="${origin}/01-sambisari-main-temple-crisco1492.jpg"><meta name="twitter:card" content="summary_large_image">`;
+ const body=renderToString(<Home initialLang={lang} initialPath={route}/>);
+ const html=template.replace(/<html lang="[^"]*">/,`<html lang="${lang}">`).replace('</head>',head+'</head>').replace('<div id="root"></div>',`<div id="root">${body}</div>`);
+ const target=path.join(dir,route.slice(1),'index.html');await mkdir(path.dirname(target),{recursive:true});await writeFile(target,html);
+}
+await writeFile(path.join(dir,'404.html'),'<!doctype html><html lang="id"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="robots" content="noindex, follow"><title>404 — Sambisari Field Guide</title></head><body><main><h1>404</h1><p>Halaman tidak ditemukan / Page not found.</p><a href="/">Panduan Bahasa Indonesia</a> · <a href="/en/">English guide</a></main></body></html>');
+await writeFile(path.join(dir,'robots.txt'),`User-agent: *\nAllow: /\nSitemap: ${origin}/sitemap.xml\n`);
+await writeFile(path.join(dir,'sitemap.xml'),`<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">${pages.flatMap(p=>p.map(route=>`<url><loc>${origin+route}</loc><xhtml:link rel="alternate" hreflang="id" href="${origin+p[0]}"/><xhtml:link rel="alternate" hreflang="en" href="${origin+p[1]}"/><xhtml:link rel="alternate" hreflang="x-default" href="${origin+p[0]}"/></url>`)).join('')}</urlset>`);
+console.log('Prerendered 8 topic-paired language pages, noindex404, sitemap and robots.');
