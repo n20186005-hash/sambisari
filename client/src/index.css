@@ -290,3 +290,9 @@ h3 { margin: 0 0 7px; font-size: 15px; font-weight: 800; }
 
 .faq-item summary{width:100%;padding:21px 0;display:grid;grid-template-columns:44px 1fr 25px;gap:8px;text-align:left;color:var(--ink);cursor:pointer;list-style:none}.faq-item summary::-webkit-details-marker{display:none}.faq-item summary>span{color:var(--clay);font-family:"IBM Plex Mono",monospace;font-size:10px}.faq-item summary b{font-size:15px}.faq-item[open] summary svg{transform:rotate(180deg)}.faq-static-answer{padding:0 28px 24px 52px;color:var(--ink-soft);font-size:13px;line-height:1.75}
 @media(max-width:1100px){.site-header{height:auto!important;min-height:90px}.main-nav a{min-width:0}}
+
+/* Keep mobile attribution in the hero flow below the actions. */
+@media (max-width: 600px) {
+  .hero-actions { flex-wrap: wrap; row-gap: 14px; }
+  .hero-copy .photo-credit { position: static; display: block; margin-top: 24px; max-width: 100%; line-height: 1.6; }
+}
