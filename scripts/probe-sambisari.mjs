@@ -17,6 +17,22 @@ export const RESULTS = new Set([
  'STOP_ORIGINAL_BINDING_CHANGED', 'STOP_POSTCHECK_TARGET_UNPROVEN', 'STOP_INTERNAL_FAILURE',
  'STOP_INVALID_PROBE_RESULT', 'STOP_PROBE_UNEXPECTED_FAILURE'
 ]);
+// Rebuild diagnostics field-by-field; never spread an API or recovery object into evidence.
+export function sanitizePagination(input) {
+ if (!input || !['domains','dns'].includes(input.stage)) return undefined;
+ const out={stage:input.stage};
+ for(const key of ['result_info_present','result_info_object','result_array']) if(typeof input[key]==='boolean') out[key]=input[key];
+ if(Number.isInteger(input.requested_page) && input.requested_page>=1 && input.requested_page<=10) out.requested_page=input.requested_page;
+ if(Number.isInteger(input.result_length) && input.result_length>=0 && input.result_length<=1_000_000) out.result_length=input.result_length;
+ for(const key of ['page','total_pages','total_count','count','per_page']) {
+  const field=input[key];
+  if(!field || typeof field.present!=='boolean' || typeof field.integer!=='boolean') continue;
+  const clean={present:field.present,integer:field.integer};
+  if(field.present && field.integer && Number.isInteger(field.value) && field.value>=-1_000_000 && field.value<=1_000_000) clean.value=field.value;
+  out[key]=clean;
+ }
+ return out;
+}
 // Build-stage wrapper is read-only even if the underlying recovery module later supports attach.
 export async function probe({env = {}, fetchImpl, outputDir = 'dist/public', recoverImpl = recover, log = () => {}} = {}) {
  if (env.WORKERS_CI !== '1' || env.WORKERS_CI_BRANCH !== 'main') return {result:'SKIP_NOT_PRODUCTION_CI',written:false};
@@ -58,6 +74,7 @@ export async function probe({env = {}, fetchImpl, outputDir = 'dist/public', rec
  const evidence={commit:env.WORKERS_CI_COMMIT_SHA,checkedAt:new Date().toISOString(),target:TARGET,result:outcome.result};
  if (Number.isInteger(outcome.status) && outcome.status>=100 && outcome.status<=599) evidence.status=outcome.status;
  if (Number.isInteger(outcome.code) && outcome.code>=0 && outcome.code<=Number.MAX_SAFE_INTEGER) evidence.code=outcome.code;
+ if (['STOP_PAGINATION_UNPROVEN','STOP_PAGINATION_CHANGED','STOP_PAGINATION_INCOMPLETE'].includes(outcome.result)) { const safe = sanitizePagination(outcome.pagination); if (safe) evidence.pagination=safe; }
  try {
   await mkdir(outputDir,{recursive:true});
   const destination=path.join(outputDir,'deployment-evidence.json');

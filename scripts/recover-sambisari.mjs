@@ -9,23 +9,38 @@ const API = 'https://api.cloudflare.com/client/v4';
 const MAX_PAGES = 10, PER_PAGE = 100, MAX_REQUESTS = 32;
 const fields = ['id', 'hostname', 'service', 'zone_id', 'zone_name', 'environment', 'enabled', 'previews_enabled'];
 class Stop extends Error {
-  constructor(reason, status, code) { super(reason); this.reason = reason; this.status = status; this.code = code; }
+  constructor(reason, status, code, pagination) { super(reason); this.reason = reason; this.status = status; this.code = code; this.pagination = pagination; }
 }
-const stop = (reason) => { throw new Stop(reason); };
+const stop = (reason, pagination) => { throw new Stop(reason, undefined, undefined, pagination); };
 const validString = (v) => typeof v === 'string' && v.length > 0;
 function validateDomain(d) {
   if (!d || !['id', 'hostname', 'service', 'zone_id', 'zone_name', 'environment'].every(k => validString(d[k])) || typeof d.enabled !== 'boolean' || typeof d.previews_enabled !== 'boolean' || d.hostname !== d.hostname.toLowerCase().replace(/\.$/, '')) stop('DOMAIN_SHAPE_UNPROVEN');
 }
 function snapshot(d) { return JSON.stringify(fields.map(k => d[k])); }
+function paginationDiagnostic(data, stage, requestedPage) {
+  const m = data?.result_info;
+  const object = m !== null && typeof m === 'object' && !Array.isArray(m);
+  const out = {stage, requested_page: requestedPage, result_info_present: Object.hasOwn(data, 'result_info'), result_info_object: object, result_array: Array.isArray(data.result)};
+  if (Array.isArray(data.result) && data.result.length <= 1_000_000) out.result_length = data.result.length;
+  for (const key of ['page','total_pages','total_count','count','per_page']) {
+    const present = object && Object.hasOwn(m,key);
+    const value = present ? m[key] : undefined;
+    out[key] = {present, integer: Number.isInteger(value)};
+    if (Number.isInteger(value) && value >= -1_000_000 && value <= 1_000_000) out[key].value = value;
+  }
+  return out;
+}
+
 
 export async function recover({ env = {}, fetchImpl, log = () => {}, probeOnly = true } = {}) {
-  const emit = (result, status, code) => {
+  const emit = (result, status, code, pagination) => {
     // Only static result identifiers and numeric API status/code. Never error messages/body/headers.
     const row = { hostname: TARGET, result };
     if (Number.isInteger(status)) row.status = status;
     if (Number.isInteger(code)) row.code = code;
+    if (pagination) row.pagination = pagination;
     log(JSON.stringify(row));
-    return { result, ...(Number.isInteger(status) ? { status } : {}), ...(Number.isInteger(code) ? { code } : {}) };
+    return { result, ...(Number.isInteger(status) ? { status } : {}), ...(Number.isInteger(code) ? { code } : {}), ...(pagination ? { pagination } : {}) };
   };
   if (env.WORKERS_CI !== '1' || env.WORKERS_CI_BRANCH !== 'main') return emit('SKIP_NOT_PRODUCTION_CI');
   if (env.BRANCH !== undefined && env.BRANCH !== 'main') return emit('STOP_BRANCH_CONFLICT');
@@ -63,6 +78,7 @@ export async function recover({ env = {}, fetchImpl, log = () => {}, probeOnly =
       const data = await request(documentedSinglePage && page === 1 ? path : `${path}${sep}page=${page}&per_page=${PER_PAGE}`);
       if (!Array.isArray(data.result)) stop('LIST_SHAPE_UNPROVEN');
       const m = data.result_info;
+      const diagnostic = () => paginationDiagnostic(data, documentedSinglePage ? 'domains' : 'dns', page);
       // cloudflare@5.2.0 Workers Domains uses DomainsSinglePage extends SinglePage,
       // whose nextPageInfo() returns null. Only this endpoint may omit metadata.
       if (documentedSinglePage && page === 1 && m === undefined) {
@@ -71,16 +87,16 @@ export async function recover({ env = {}, fetchImpl, log = () => {}, probeOnly =
         return data.result;
       }
       // Missing/inconsistent pagination metadata is not assumed to mean complete.
-      if (!m || m.page !== page || !Number.isInteger(m.total_pages) || m.total_pages < 1 || m.total_pages > MAX_PAGES || !Number.isInteger(m.total_count) || m.total_count < 0 || m.count !== data.result.length || !Number.isInteger(m.per_page) || m.per_page < 1 || m.per_page > PER_PAGE || data.result.length > m.per_page) stop('PAGINATION_UNPROVEN');
+      if (!m || m.page !== page || !Number.isInteger(m.total_pages) || m.total_pages < 1 || m.total_pages > MAX_PAGES || !Number.isInteger(m.total_count) || m.total_count < 0 || m.count !== data.result.length || !Number.isInteger(m.per_page) || m.per_page < 1 || m.per_page > PER_PAGE || data.result.length > m.per_page) stop('PAGINATION_UNPROVEN', diagnostic());
       if (page === 1) { expectedTotal = m.total_count; expectedPages = m.total_pages; }
-      if (m.total_count !== expectedTotal || m.total_pages !== expectedPages || page > expectedPages) stop('PAGINATION_CHANGED');
-      if (page < expectedPages && data.result.length === 0) stop('PAGINATION_INCOMPLETE');
+      if (m.total_count !== expectedTotal || m.total_pages !== expectedPages || page > expectedPages) stop('PAGINATION_CHANGED', diagnostic());
+      if (page < expectedPages && data.result.length === 0) stop('PAGINATION_INCOMPLETE', diagnostic());
       for (const row of data.result) {
         validate(row);
         if (!validString(row.id) || ids.has(row.id)) stop('DUPLICATE_OR_MISSING_ID');
         ids.add(row.id); rows.push(row);
       }
-      if (page === expectedPages) { if (rows.length !== expectedTotal) stop('PAGINATION_INCOMPLETE'); return rows; }
+      if (page === expectedPages) { if (rows.length !== expectedTotal) stop('PAGINATION_INCOMPLETE', diagnostic()); return rows; }
     }
     stop('PAGE_BOUND_EXCEEDED');
   }
@@ -112,7 +128,7 @@ export async function recover({ env = {}, fetchImpl, log = () => {}, probeOnly =
     if (target.length !== 1 || snapshot(target[0]) !== snapshot(written.result) || before.some(d => d.id === target[0].id) || after.length !== before.length + 1) stop('POSTCHECK_TARGET_UNPROVEN');
     return emit('ATTACHED_AND_ORIGINALS_PRESERVED');
   } catch (error) {
-    return emit(error instanceof Stop ? `STOP_${error.reason}` : 'STOP_INTERNAL_FAILURE', error instanceof Stop ? error.status : undefined, error instanceof Stop ? error.code : undefined);
+    return emit(error instanceof Stop ? `STOP_${error.reason}` : 'STOP_INTERNAL_FAILURE', error instanceof Stop ? error.status : undefined, error instanceof Stop ? error.code : undefined, error instanceof Stop ? error.pagination : undefined);
   }
 }
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
