@@ -86,6 +86,14 @@ export async function recover({ env = {}, fetchImpl, log = () => {}, probeOnly =
         for (const row of data.result) { validate(row); if (!validString(row.id) || ids.has(row.id)) stop('DUPLICATE_OR_MISSING_ID'); ids.add(row.id); }
         return data.result;
       }
+      // Observed Domains SinglePage envelope: complete counts, no total_pages.
+      // This exception is never used for DNS or for a conflicting total_pages field.
+      if (documentedSinglePage && page === 1 && m !== null && typeof m === 'object' && !Array.isArray(m) && !Object.hasOwn(m, 'total_pages')) {
+        if (data.result.length > 1000) stop('SINGLE_PAGE_BOUND_EXCEEDED');
+        if (m.page !== 1 || m.count !== data.result.length || m.total_count !== data.result.length || !Number.isInteger(m.per_page) || m.per_page < 1 || m.per_page < data.result.length || m.per_page > 1000) stop('PAGINATION_UNPROVEN', diagnostic());
+        for (const row of data.result) { validate(row); if (!validString(row.id) || ids.has(row.id)) stop('DUPLICATE_OR_MISSING_ID'); ids.add(row.id); }
+        return data.result;
+      }
       // Missing/inconsistent pagination metadata is not assumed to mean complete.
       if (!m || m.page !== page || !Number.isInteger(m.total_pages) || m.total_pages < 1 || m.total_pages > MAX_PAGES || !Number.isInteger(m.total_count) || m.total_count < 0 || m.count !== data.result.length || !Number.isInteger(m.per_page) || m.per_page < 1 || m.per_page > PER_PAGE || data.result.length > m.per_page) stop('PAGINATION_UNPROVEN', diagnostic());
       if (page === 1) { expectedTotal = m.total_count; expectedPages = m.total_pages; }
