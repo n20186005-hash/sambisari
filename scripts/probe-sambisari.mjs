@@ -39,6 +39,7 @@ export async function probe({env = {}, fetchImpl, outputDir = 'dist/public', rec
  // Do not publish unvalidated user-controlled text as build provenance.
  if (!/^[a-f0-9]{40}$/.test(env.WORKERS_CI_COMMIT_SHA || '')) { log(JSON.stringify({hostname:TARGET,result:'STOP_INVALID_COMMIT'})); return {result:'STOP_INVALID_COMMIT',written:false}; }
  let outcome;
+ let readHttpFailure;
  const verifiedZones = new Set();
  const readOnlyFetch = typeof fetchImpl === 'function' ? async (input, options) => {
   const deny = () => { throw new Error('PROBE_TRANSPORT_FORBIDDEN'); };
@@ -59,6 +60,7 @@ export async function probe({env = {}, fetchImpl, outputDir = 'dist/public', rec
   if (!isDomains && (url.searchParams.get('name.exact') !== TARGET || url.searchParams.get('match') !== 'all')) deny();
   // Never permit redirect following, even if a future caller supplies different options.
   const response = await fetchImpl(url.toString(), {...options,redirect:'error'});
+  if (!response.ok && Number.isInteger(response.status) && response.status>=100 && response.status<=599) readHttpFailure={stage:isDomains?'domains':'dns',status:response.status};
   return {ok:response.ok,status:response.status,json:async()=>{
    const body=await response.json();
    // Learn a DNS allowlist only from a valid apex record in an account-domain read.
@@ -73,6 +75,7 @@ export async function probe({env = {}, fetchImpl, outputDir = 'dist/public', rec
  if (!RESULTS.has(outcome?.result)) outcome={result:'STOP_INVALID_PROBE_RESULT'};
  const evidence={commit:env.WORKERS_CI_COMMIT_SHA,checkedAt:new Date().toISOString(),target:TARGET,result:outcome.result};
  if (Number.isInteger(outcome.status) && outcome.status>=100 && outcome.status<=599) evidence.status=outcome.status;
+ if (outcome.result==='STOP_READ_HTTP_ERROR' && readHttpFailure?.status===outcome.status && ['domains','dns'].includes(readHttpFailure.stage)) evidence.httpStage=readHttpFailure.stage;
  if (Number.isInteger(outcome.code) && outcome.code>=0 && outcome.code<=Number.MAX_SAFE_INTEGER) evidence.code=outcome.code;
  if (['STOP_PAGINATION_UNPROVEN','STOP_PAGINATION_CHANGED','STOP_PAGINATION_INCOMPLETE'].includes(outcome.result)) { const safe = sanitizePagination(outcome.pagination); if (safe) evidence.pagination=safe; }
  try {
