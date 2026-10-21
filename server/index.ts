@@ -16,10 +16,15 @@ async function startServer() {
       ? path.resolve(__dirname, "public")
       : path.resolve(__dirname, "..", "dist", "public");
 
+  app.get(["/404", "/404/", "/404.html", "/404.html/"], (_req, res) => {
+    res.set("X-Robots-Tag", "noindex, follow");
+    res.status(404).sendFile(path.join(staticPath, "404.html"));
+  });
   app.use(express.static(staticPath));
 
   // Unknown routes preserve a real 404 response.
   app.get("*", (_req, res) => {
+    res.set("X-Robots-Tag", "noindex, follow");
     res.status(404).sendFile(path.join(staticPath, "404.html"));
   });
 
